@@ -31,39 +31,23 @@ export const sign_up=error_handeling(async(req,res,next) => {
      const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
      const user_no=customAlphabet('123456789',4)()
     //upload coverimage
-    res.setHeader("Connection", "keep-alive");
-    res.status(200).json({msg:"user added"})
-    (async () => {
-            let coverimageData = {};
+    
+    const coverImage = req.files['coverimage'][0];
+    const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
 
-            // ✅ التأكد من أن هناك صورة غلاف قبل رفعها
-            if (req.files['coverimage']?.[0]) {
-                const coverImage = req.files['coverimage'][0];
-                const uploadedCover = await cloudinary.uploader.upload(coverImage.path, {
-                    folder: `social_app/users/${user_no}/coverimage`
-                });
-                coverimageData = { public_id: uploadedCover.public_id, secure_url: uploadedCover.secure_url };
-            }
+    // upload images
+    const arr_of_files = [];
+    for (const file of req.files['images']) {
+      const { public_id, secure_url } = await cloudinary.uploader.upload(file.path, { folder: `social_app/users/${user_no}/images` });
+      arr_of_files.push({ public_id, secure_url });
+    }
 
-            // ✅ التأكد من وجود صور أخرى قبل محاولة رفعها
-            const arr_of_files = [];
-            if (req.files['images']?.length) {
-                for (const file of req.files['images']) {
-                    const uploadedFile = await cloudinary.uploader.upload(file.path, {
-                        folder: `social_app/users/${user_no}/images`
-                    });
-                    arr_of_files.push({ public_id: uploadedFile.public_id, secure_url: uploadedFile.secure_url });
-                }
-            }
-
-            // ✅ تحديث بيانات المستخدم بعد رفع الصور
-            await user.create({
-                name, email, password: hashpassword, phone: hashphone, gender,
-                provider: 'system', coverimage: coverimageData, images: arr_of_files, user_no
-            });
-
-            // ✅ إرسال الإيميل بعد رفع الصور
-            eventEmitter.emit('sendemail', req.body);})})
+     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system',coverimage:{public_id,secure_url},images:arr_of_files,user_no})
+    
+     //send email
+     eventEmitter.emit('sendemail',req.body)
+     res.status(200).json({msg:"user added"})
+})
 
 //--------------------------------------confirm account-------------------------------------------------------------------------------
 
@@ -156,10 +140,9 @@ export const social_login=error_handeling(async(req,res,next) => {
    const User = await user.findOne({email})
    //sign up with google
    if(!User){
-      res.status(200).json({msg:"user added"})
       await user.create({email,provider:'google',name:name,coverimage:picture,confirm:email_verified,user_no:customAlphabet('123456789',4)()})
     
-     
+      return res.status(200).json({msg:"user added"})
    }
    //login by google
    if(User.provider=='system'){
@@ -179,7 +162,7 @@ export const update_userinfo=error_handeling(async(req,res,next) => {
     const {phone}=req.body
     const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
     req.body.phone=hashphone
-}res.status(200).json({msg:'user info updated successfully'})
+}
     //update user coverimage
    if(req?.file){
    await cloudinary.uploader.destroy(coverimage.public_id
@@ -189,7 +172,7 @@ export const update_userinfo=error_handeling(async(req,res,next) => {
 
 }
      await user.updateOne({email},{...req.body})
-     
+     res.status(200).json({msg:'user info updated successfully'})
 })
 //--------------------------------------------share profile----------------------------------------------------------------------------------
 export const share_profile=error_handeling(async(req,res,next) => {
