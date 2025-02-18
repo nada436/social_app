@@ -1,4 +1,4 @@
-import { user } from "../database/models/user.model.js";
+
 import jwt from 'jsonwebtoken'
 import { error_handeling } from "../utils/error_handeling.js";
 export const authantcation_types={

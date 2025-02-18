@@ -31,6 +31,7 @@ export const sign_up=error_handeling(async(req,res,next) => {
      const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
      const user_no=customAlphabet('123456789',4)()
     //upload coverimage
+    res.setHeader("Connection", "keep-alive");
     
     const coverImage = req.files['coverimage'][0];
     const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
