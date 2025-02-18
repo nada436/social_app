@@ -33,7 +33,7 @@ export const sign_up=error_handeling(async(req,res,next) => {
     //upload coverimage
     res.setHeader("Connection", "keep-alive");
     res.status(200).json({msg:"user added"})
-    const coverImage = req.files['coverimage'][0];
+    (async () => {const coverImage = req.files['coverimage'][0];
     const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
 
     // upload images
@@ -42,9 +42,9 @@ export const sign_up=error_handeling(async(req,res,next) => {
       const { public_id, secure_url } = await cloudinary.uploader.upload(file.path, { folder: `social_app/users/${user_no}/images` });
       arr_of_files.push({ public_id, secure_url });
     }
-
-     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system',coverimage:{public_id,secure_url},images:arr_of_files,user_no})
     
+     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system',coverimage:{public_id,secure_url},images:arr_of_files,user_no})
+    })
      //send email
      eventEmitter.emit('sendemail',req.body)
     
