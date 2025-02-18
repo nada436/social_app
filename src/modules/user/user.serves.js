@@ -33,22 +33,37 @@ export const sign_up=error_handeling(async(req,res,next) => {
     //upload coverimage
     res.setHeader("Connection", "keep-alive");
     res.status(200).json({msg:"user added"})
-    (async () => {const coverImage = req.files['coverimage'][0];
-    const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
+    (async () => {
+            let coverimageData = {};
 
-    // upload images
-    const arr_of_files = [];
-    for (const file of req.files['images']) {
-      const { public_id, secure_url } = await cloudinary.uploader.upload(file.path, { folder: `social_app/users/${user_no}/images` });
-      arr_of_files.push({ public_id, secure_url });
-    }
-    
-     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system',coverimage:{public_id,secure_url},images:arr_of_files,user_no})
-    })
-     //send email
-     eventEmitter.emit('sendemail',req.body)
-    
-})
+            // ✅ التأكد من أن هناك صورة غلاف قبل رفعها
+            if (req.files['coverimage']?.[0]) {
+                const coverImage = req.files['coverimage'][0];
+                const uploadedCover = await cloudinary.uploader.upload(coverImage.path, {
+                    folder: `social_app/users/${user_no}/coverimage`
+                });
+                coverimageData = { public_id: uploadedCover.public_id, secure_url: uploadedCover.secure_url };
+            }
+
+            // ✅ التأكد من وجود صور أخرى قبل محاولة رفعها
+            const arr_of_files = [];
+            if (req.files['images']?.length) {
+                for (const file of req.files['images']) {
+                    const uploadedFile = await cloudinary.uploader.upload(file.path, {
+                        folder: `social_app/users/${user_no}/images`
+                    });
+                    arr_of_files.push({ public_id: uploadedFile.public_id, secure_url: uploadedFile.secure_url });
+                }
+            }
+
+            // ✅ تحديث بيانات المستخدم بعد رفع الصور
+            await user.create({
+                name, email, password: hashpassword, phone: hashphone, gender,
+                provider: 'system', coverimage: coverimageData, images: arr_of_files, user_no
+            });
+
+            // ✅ إرسال الإيميل بعد رفع الصور
+            eventEmitter.emit('sendemail', req.body);})})
 
 //--------------------------------------confirm account-------------------------------------------------------------------------------
 
