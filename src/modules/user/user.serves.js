@@ -32,7 +32,7 @@ export const sign_up=error_handeling(async(req,res,next) => {
      const user_no=customAlphabet('123456789',4)()
     //upload coverimage
     res.setHeader("Connection", "keep-alive");
-    
+    res.status(200).json({msg:"user added"})
     const coverImage = req.files['coverimage'][0];
     const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
 
@@ -47,7 +47,7 @@ export const sign_up=error_handeling(async(req,res,next) => {
     
      //send email
      eventEmitter.emit('sendemail',req.body)
-     res.status(200).json({msg:"user added"})
+    
 })
 
 //--------------------------------------confirm account-------------------------------------------------------------------------------
@@ -141,9 +141,10 @@ export const social_login=error_handeling(async(req,res,next) => {
    const User = await user.findOne({email})
    //sign up with google
    if(!User){
+      res.status(200).json({msg:"user added"})
       await user.create({email,provider:'google',name:name,coverimage:picture,confirm:email_verified,user_no:customAlphabet('123456789',4)()})
     
-      return res.status(200).json({msg:"user added"})
+     
    }
    //login by google
    if(User.provider=='system'){
@@ -163,7 +164,7 @@ export const update_userinfo=error_handeling(async(req,res,next) => {
     const {phone}=req.body
     const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
     req.body.phone=hashphone
-}
+}res.status(200).json({msg:'user info updated successfully'})
     //update user coverimage
    if(req?.file){
    await cloudinary.uploader.destroy(coverimage.public_id
@@ -173,7 +174,7 @@ export const update_userinfo=error_handeling(async(req,res,next) => {
 
 }
      await user.updateOne({email},{...req.body})
-     res.status(200).json({msg:'user info updated successfully'})
+     
 })
 //--------------------------------------------share profile----------------------------------------------------------------------------------
 export const share_profile=error_handeling(async(req,res,next) => {
