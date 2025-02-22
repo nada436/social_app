@@ -66,7 +66,18 @@ const userSchema = new mongoose.Schema(
       time: [
            Date
       ]
-  }],temp_email:String,
+  }],blockedUsers: [
+    {
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User'  
+    }],
+   friends: [
+      {
+          type: mongoose.Schema.Types.ObjectId, 
+          ref: 'User'  
+      }],
+
+    temp_email:String,
   otp_oldemail:String,
   otp_newemail:String,
   user_no:String,

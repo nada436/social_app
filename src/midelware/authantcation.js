@@ -1,6 +1,7 @@
 
 import jwt from 'jsonwebtoken'
 import { error_handeling } from "../utils/error_handeling.js";
+import { user } from '../database/models/user.model.js';
 export const authantcation_types={
     access_token:"access_token",
     refresh_token:"refresh_token"
@@ -46,10 +47,6 @@ export const decoded=error_handeling(async(authantcation,authantcation_type,next
 )
 
 
-
-
-
-
 export const authantcation=async(req,res,next) => {
     const{authantcation}=req.headers
     const User=await decoded(authantcation,authantcation_types.access_token,next)
@@ -58,3 +55,37 @@ export const authantcation=async(req,res,next) => {
         next()
 }
 
+
+
+export const socket_auth=async(authantcation) => {
+   
+    const [role, token] = authantcation.split(' ');
+    let access_token=''
+    if (role=="user"){
+        access_token=process.env.access_token_user
+    }
+    else{
+        access_token=process.env.access_token_admin
+    }
+    
+        const tokendata=jwt.verify(token,access_token)    
+        const User=await user.findOne({email:tokendata.email})
+        
+        if(!User ){
+            return {message:"something happen wrong  itis not valid token",statuscode:'404'}
+        }
+
+        if(User?.changepasswordAt){
+           
+        if(tokendata.iat<parseInt(User.changepasswordAt.getTime() / 1000, 10)){
+            return {message:"token expired",statuscode:'404'}
+
+        }}
+        if(User?.deleteat){
+            return {message:"user was deleted",statuscode:'404'}
+    
+            } 
+
+            return{ user:User,statuscode:'200'}
+
+}

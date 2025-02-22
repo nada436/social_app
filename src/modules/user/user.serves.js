@@ -1,5 +1,5 @@
 import { customAlphabet} from 'nanoid'
-import { user } from '../../database/models/user.model.js';
+import { user} from '../../database/models/user.model.js';
 import { eventEmitter } from '../../utils/E-mail service/email event.js';
 import { error_handeling } from './../../utils/error_handeling.js';
 import {OAuth2Client} from 'google-auth-library';
@@ -11,6 +11,7 @@ import cloudinary from '../../cloudinary/index.js';
 import { authantcation_types, decoded } from '../../midelware/authantcation.js';
 import { post } from '../../database/models/post.model.js';
 import { comment } from '../../database/models/comment.model.js';
+
 
 
 
@@ -72,9 +73,10 @@ export const login=error_handeling(async(req,res,next) => {
     if(!compare){
         return next(new Error("wronge password try again"))
     }
+    
     const token=jwt.sign({email},User.role=='admin'?process.env.access_token_admin:process.env.access_token_user,{expiresIn:'1h'})
     const refresh_token=jwt.sign({email},user.role=='admin'?process.env.refresh_token_admin:process.env.refresh_token_user,{expiresIn:'1w'})
-    res.json({token,refresh_token})
+    res.json({token,refresh_token,message:'done'})
     
 
 })
@@ -97,6 +99,13 @@ export const forget_password=error_handeling(async(req,res,next) => {
     //send email
     eventEmitter.emit('forget_password',req.user)
      res.status(200).json({msg:'otp sent'})
+})
+//--------------------------------------------show my profile-------------------------------------------------------------------------------------
+export const myprofile=error_handeling(async(req,res,next) => {
+    const{_id}=req.user
+    const User=await user.findById({_id}).populate({path:'friends'})
+    console.log(User)
+    res.status(200).json({User})
 })
 
 //---------------------------------------reassign password(update password)-----------------------------------------------------------------------
@@ -177,9 +186,13 @@ export const update_userinfo=error_handeling(async(req,res,next) => {
 //--------------------------------------------share profile----------------------------------------------------------------------------------
 export const share_profile=error_handeling(async(req,res,next) => {
     const {id}=req.params      //id of profile want to visit
-    const User=await user.findOne({_id:id,isdeleted:false})
+    const User=await user.findOne({_id:id,isdeleted:false,_id:{ $nin: req.user.blockedUsers}})
+
     if(!user){
         return next(new Error("profile not found, may be deleted "))
+    }
+    if(User.blockedUsers.includes(req.user._id)){
+        return next(new Error("user bloked you so you cann't view this profile "))
     }
     if(id.toString()==req.user._id.toString()){
        return res.status(200).json({your_profile:User})
@@ -233,6 +246,77 @@ export const replace_email=error_handeling(async(req,res,next) => {
      await user.updateOne({email},{email:temp_email,$unset:{temp_email:0,otp_newemail:0,otp_oldemail:0}})
      res.status(200).json({msg:'email change successfully'})
 })
+//--------------------------------------block user(cann't see my posts and comments)-------------------------------------------------------------------------------
+export const block_user = error_handeling(async (req, res, next) => {
+    const { email } = req.body;
+    // Find the user to be blocked
+    const blockedUser = await user.findOne({ email });
+    if (!blockedUser) {
+        return res.status(404).json({ message: "User not found" });
+    }
+    // Prevent self-blocking
+    if (req.user.email === email) {
+        return res.status(400).json({ message: "You cannot block yourself" });
+    }
+    // Check if already blocked
+    if (req.user.blockedUsers.includes(blockedUser._id)) {
+        // if Blocked unblock him
+        req.user.blockedUsers = req.user.blockedUsers.filter(id => id.toString() !== blockedUser._id.toString())
+        await req.user.save();
+        return res.status(400).json({ message: "User is now unblocked" });
+    }// if unBlocked block him
+    req.user.blockedUsers.push(blockedUser._id);
+    await req.user.save();
+    res.json({ message: `User with email ${email} has been blocked` });
+});
+//--------------------------------------unblock user-------------------------------------------------------------------------------
+export const unblock_user = error_handeling(async (req, res, next) => {
+    const { email } = req.body;
+    // Find the user to be unblocked
+    const blockedUser = await user.findOne({ email });
+    if (!blockedUser) {
+        return res.status(404).json({ message: "User not found" });
+    }
+    // Prevent self-unblocking
+    if (req.user.email === email) {
+        return res.status(400).json({ message: "You cannot unblock yourself" });
+    }
+    if (!req.user.blockedUsers.includes(blockedUser._id)) {
+        return res.status(400).json({ message: "User is not blocked" });
+    }
+    // Remove from blocked list
+    req.user.blockedUsers = req.user.blockedUsers.filter(id => id!== blockedUser._id);
+
+    // Save the updated user document
+    await req.user.save();
+
+    res.json({ message: `User with email ${email} has been unblocked` });
+});
+
+//--------------------------------------add friend-------------------------------------------------------------------------------
+export const add_friend = error_handeling(async (req, res, next) => {
+    const { email } = req.body;
+    const friend=await user.findOne({email,_id:{$nin:req.user.blockedUsers}}) //cannot add friend if i blocked him
+    if(friend?.blockedUsers.includes(req.user._id)||!friend){
+        return res.status(409).json({ message: `can't find this user`});
+    }
+    if (!req.user.friends.includes(friend._id)) {
+        req.user.friends.push(friend._id);
+        await req.user.save()
+        //in other user
+        friend.friends.push(req.user._id);
+        await friend.save()
+        return res.status(201).json({ message: `Friend ${email} added.`});
+    } else {
+        req.user.friends = req.user.friends.filter(id => id.toString() !== friend._id.toString());
+        await req.user.save();
+       friend.friends = friend.friends.filter(id => id.toString() !== friend._id.toString());
+        await req.user.save();
+        return res.status(200).json({ message: `You have unfriended ${email}.` });
+    }
+    
+});
+
 
 //--------------------------------------admin dashboard-------------------------------------------------------------------------------
 

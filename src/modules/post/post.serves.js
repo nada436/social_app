@@ -1,9 +1,11 @@
 
 import cloudinary from "../../cloudinary/index.js"
-import { post } from "../../database/models/post.model.js"
+import { post} from "../../database/models/post.model.js"
 import { error_handeling } from "../../utils/error_handeling.js"
 import { customAlphabet} from 'nanoid'
 import { bagination } from "../../utils/features/bagination.js"
+import { match } from "assert"
+
 //--------------------------------------create new post-------------------------------------------------------------------------------
 
 export const add_post=error_handeling(async(req,res,next) => {
@@ -51,44 +53,92 @@ export const delete_post=error_handeling(async(req,res,next) => {
     if(!Post){
         next(new Error("invalid post"))
     }
-    await post.updateOne({_id:id},{isdeleted:true,deletedby:req.user._id})
+    await post.updateOne({_id:id},{ $set: { isdeleted: true, deletedby: req.user._id } })
     res.status(200).json({msg:'delete successfully'})
 })
 
-//----------------------------------------------------- restore post-------------------------------------------------------------------------------
+
+
+//----------------------------------------------------- restore post with all comments-------------------------------------------------------------------------------
 export const restore_post=error_handeling(async(req,res,next) => {
     const{id}=req.params
     const Post=await post.findOne({_id:id,deletedby:req.user._id,isdeleted:true})
     if(!Post){
-        next(new Error("invalid post"))
+        return next(new Error("invalid post"))
     }
-    await post.updateOne({_id:id},{$unset:{deletedby:0,isdeleted:0}})
+    await post.updateOne({_id:id},{ $unset: { deletedby: 0, isdeleted:0}})
     res.status(200).json({msg:'restore successfully'})
 })
 //----------------------------------------------------- like/unlike post-------------------------------------------------------------------------------
 export const make_react=error_handeling(async(req,res,next) => {
     const{id}=req.params
-    const Post=await post.findOne({_id:id,isdeleted:{$exists:false}})
+    const Post=await post.findOne({_id:id,isdeleted:{$exists:false}, user_id: { $nin: req.user.blockedUsers}}).populate({path:'user_id'})
     if(!Post){
-        next(new Error("invalid post"))
+        return next(new Error("invalid post"))
     }
-    
+    if(Post.user_id.blockedUsers.includes(req.user._id)){
+        return next(new Error("user bloked you so you cann't view this POST "))
+    } 
     if (Post.likes.includes(req.user._id)) {
         await post.updateOne({ _id: id }, { $pull: { likes: req.user._id } });
-        res.status(200).json({ msg: "Like removed" });
+        return res.status(200).json({ msg: "Like removed" });
     } else {
         await post.updateOne({ _id: id }, { $addToSet: { likes: req.user._id } });
-        res.status(200).json({ msg: "Liked successfully"});
+        return res.status(200).json({ msg: "Liked successfully"});
     }
    
+
 })
 
-//----------------------------------------------------- get all posts with comments-------------------------------------------------------------------------------
-export const get_posts=error_handeling(async(req,res,next) => {
-    const{page}=req.query
-    const{_page,data}=await bagination({page,model:post,populate:[{path:"user_id" ,select:'name email'},{
-        path:'likes',select:'name email'
-    },{path:'comments', populate:{path:'reply'}}]})
-    res.status(200).json({_page,data});
-   
-})
+//-----------------------------------------------------Retrieves a paginated list of posts while excluding posts,comments,replays created by blocked users.--------------------
+export const get_posts = error_handeling(async (req, res, next) => {
+    const { page } = req.query;
+
+    const { _page, data } = await bagination(
+        { page, model: post, populate: [
+            { path: "user_id", select: 'name email' },
+            { path: 'likes', select: 'name email',match:{ _id: { $nin: req.user.blockedUsers } }},
+            { path: 'comments', populate: { path: 'reply',match: { user_id: { $nin: req.user.blockedUsers } } },match: { user_id: { $nin: req.user.blockedUsers } } }
+        ]}, 
+        req.user.blockedUsers 
+    );
+    res.status(200).json({ _page, data });
+});
+//-----------------------------------------------------undo only the post they created within 2 minutes of its creation..------------------------------------------------------------------------------
+export const undo_post = error_handeling(async (req, res, next) => {
+    const { id } = req.params;
+    const Post = await post.findOne({ _id: id, user_id: req.user._id });
+
+    if (!Post) {
+        return res.status(404).json({ message: "Post not found or you don't have permission." });
+    }
+
+    const timeDiff = (Date.now() - Post.createdAt.getTime()) / 1000; 
+    if (timeDiff > 120) {
+        return res.status(403).json({ message: "Undo period expired. You can’t delete this post now." });
+    }
+
+    await post.deleteOne({ _id:id }); 
+    res.status(200).json({ message: "Post successfully undone." });
+});
+//-----------------------------------------------------user can archive a post, but only if 24 hours have passed since its creation.------------------------------------------------------------------------------
+export const archive_post = error_handeling(async (req, res, next) => {
+    const { id } = req.params;
+
+    const Post = await post.findOne({ _id:id, user_id: req.user._id });
+
+    if (!Post) {
+        return res.status(404).json({ message: "Post not found or you don't have permission." });
+    }
+
+    const timeDiff = (Date.now() - Post.createdAt.getTime()) / (1000 * 60 * 60); //BY HOURS
+
+    if (timeDiff < 24) {
+        return res.status(403).json({ message: "You can archive this post only after 24 hours." });
+    }
+
+    Post.isArchived = true;
+    await Post.save();
+
+    res.status(200).json({ message: "Post archived successfully." });
+});

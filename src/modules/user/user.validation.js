@@ -84,7 +84,7 @@ export const update_schema = {
 
 // Share Schema
 export const share_schema = {
-  body: Joi.object({
+  params: Joi.object({
     id: Joi.string().required(),
   }),
 };
@@ -108,5 +108,12 @@ export const replace_email_schema = {
 export const update_role_schema = {
   body: Joi.object({
     new_role:Joi.string().valid('user','admin').required(),
+  }),
+};
+
+
+export const block_user_schema = {
+  body: Joi.object({
+    email:Joi.string().email().required(),
   }),
 };
