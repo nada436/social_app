@@ -24,7 +24,7 @@ export const sendmessage=(socket) => {
                  Chat = await chat.create({
                     mainUser: data.user._id,
                     subParticipant: messaginfo.destId, 
-                    messages: [{ senderId: data.user._id, message }]
+                    messages: []
                 });
     
                
@@ -35,4 +35,5 @@ export const sendmessage=(socket) => {
             socket.to(connect_users.get(messaginfo.destId)).emit("receiveMessage", { message })
     });     
 }
+
 
