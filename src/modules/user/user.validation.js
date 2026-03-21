@@ -46,6 +46,7 @@ export const signup_schema = {
 export const confirm_schema = {
   body: Joi.object({
     code: genral_schema.code,
+     email: genral_schema.email.required()
   }),
 };
 
@@ -60,12 +61,7 @@ export const login_schema = {
 // Reset Password Schema
 export const reassign_password = {
   body: Joi.object({
-    oldpassword: genral_schema.password.required(),
     newpassword: genral_schema.password.required(),
-    cnewpassword: Joi.string()
-      .valid(Joi.ref('newpassword'))
-      .required()
-      .messages({ 'any.only': 'Confirm password must match password' }),
     code: genral_schema.code,
   }),
 };

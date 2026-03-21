@@ -2,15 +2,15 @@
 import jwt from 'jsonwebtoken'
 import { error_handeling } from "../utils/error_handeling.js";
 import { user } from '../database/models/user.model.js';
-export const authantcation_types={
+export const authentication_types={
     access_token:"access_token",
     refresh_token:"refresh_token"
 }
-export const decoded=error_handeling(async(authantcation,authantcation_type,next) => {
-    if(!authantcation){
+export const decoded=error_handeling(async(authentication,authentication_type,next) => {
+    if(!authentication){
         return next(new Error("correct token requard"));
     }
-       const [role, token] = authantcation.split(' ');
+       const [role, token] = authentication.split(' ');
        if(!token || !role){
         return next(new Error("correct token requard"));
     }
@@ -25,8 +25,8 @@ export const decoded=error_handeling(async(authantcation,authantcation_type,next
         refresh_token=process.env.refresh_token_admin
     }
     
-        const tokendata=jwt.verify(token,authantcation_type==authantcation_types.access_token?access_token:refresh_token)    
-        const User=await user.findOne({email:tokendata.email})
+        const tokendata=jwt.verify(token,authentication_type==authentication_types.access_token?access_token:refresh_token)    
+        const User=await user.findOne({_id:tokendata.id})
         
         if(!User ){
             return next(new Error("something happen wrong  itis not valid token"));
@@ -47,19 +47,28 @@ export const decoded=error_handeling(async(authantcation,authantcation_type,next
 )
 
 
-export const authantcation=async(req,res,next) => {
-    const{authantcation}=req.headers
-    const User=await decoded(authantcation,authantcation_types.access_token,next)
-    req.user=User
-        
-        next()
-}
+export const authentication = async (req, res, next) => {
+    const authentication = req.headers.authentication;
+
+    if (!authentication) {
+        return next(new Error("correct token required"));
+    }
+
+    const User = await decoded(
+        authentication,
+        authentication_types.access_token,
+        next
+    );
+
+    req.user = User;
+
+    next();
+};
 
 
-
-export const socket_auth=async(authantcation) => {
+export const socket_auth=async(authentcation) => {
    
-    const [role, token] = authantcation.split(' ');
+    const [role, token] = authentcation.split(' ');
     let access_token=''
     if (role=="user"){
         access_token=process.env.access_token_user

@@ -8,7 +8,7 @@ import bcrypt from 'bcrypt';
 import CryptoJS from 'crypto-js'
 import { now } from 'mongoose';
 import cloudinary from '../../cloudinary/index.js';
-import { authantcation_types, decoded } from '../../midelware/authantcation.js';
+import { authentication_types, decoded } from '../../middleware/authentication.js';
 import { post } from '../../database/models/post.model.js';
 import { comment } from '../../database/models/comment.model.js';
 
@@ -52,16 +52,32 @@ export const sign_up=error_handeling(async(req,res,next) => {
 
 //--------------------------------------confirm account-------------------------------------------------------------------------------
 
-export const confirm=error_handeling(async(req,res,next) => {
-    const{code}=req.body
-    const {email,otpEmail,confirm}=req.user
-    const compare=await bcrypt.compare(code,otpEmail)
-    if(!compare||confirm==true){
-        return next(new Error("invalid code or email already confirmed"))
+export const confirm = error_handeling(async (req, res, next) => {
+    const { code, email } = req.body;
+
+    const current_user = await user.findOne({ email });
+
+    if (!current_user) {
+        return next(new Error("user not found"));
     }
-     await user.updateOne({email},{confirm:true})
-     res.status(200).json({msg:'user confirm successfully'})
-})
+
+    if (current_user.confirm) {
+        return next(new Error("email already confirmed"));
+    }
+
+    const compare = await bcrypt.compare(code, current_user.otpEmail);
+
+    if (!compare) {
+        return next(new Error("invalid code"));
+    }
+
+    await user.updateOne(
+        { email },
+        { $set: { confirm: true } }
+    );
+
+    res.status(200).json({ msg: 'user confirmed successfully' });
+});
 //-----------------------------------------login by system--------------------------------------------------------------------------
 export const login=error_handeling(async(req,res,next) => {
     const{email,password}=req.body
@@ -73,9 +89,9 @@ export const login=error_handeling(async(req,res,next) => {
     if(!compare){
         return next(new Error("wronge password try again"))
     }
-    
-    const token=jwt.sign({email},User.role=='admin'?process.env.access_token_admin:process.env.access_token_user,{expiresIn:'1h'})
-    const refresh_token=jwt.sign({email},user.role=='admin'?process.env.refresh_token_admin:process.env.refresh_token_user,{expiresIn:'1w'})
+    const id=User._id
+    const token=jwt.sign({id},User.role=='admin'?process.env.access_token_admin:process.env.access_token_user,{expiresIn:'1h'})
+    const refresh_token=jwt.sign({id},user.role=='admin'?process.env.refresh_token_admin:process.env.refresh_token_user,{expiresIn:'1w'})
     res.json({token,refresh_token,message:'done'})
     
 
@@ -84,9 +100,9 @@ export const login=error_handeling(async(req,res,next) => {
 
 //-------------------------------------------refesh_token-----------------------------------------------------------------------------------
 export const refesh_token=error_handeling(async(req,res,next) => {
-    const{authantcation}=req.body
+    const{authentication}=req.body
     
-    const User=await decoded(authantcation,authantcation_types.refresh_token,next)
+    const User=await decoded(authentication,authentication_types.refresh_token,next)
     if(!User){return }
     const email=User.email
     const token=jwt.sign({email},user.role=='admin'?process.env.access_token_admin:process.env.access_token_user,{expiresIn:'1h'})
@@ -108,25 +124,29 @@ export const myprofile=error_handeling(async(req,res,next) => {
 })
 
 //---------------------------------------reassign password(update password)-----------------------------------------------------------------------
-export const re_assign=error_handeling(async(req,res,next) => {
-    const{code,oldpassword,newpassword}=req.body
-    const{email,otppassword,password}=req.user
-    const compare=await bcrypt.compare(code, otppassword)
-    if(!compare){
-        return next(new Error("invalid code "))
-    }
-    //oldpassword is exist or not
-    const is_correct_password=await bcrypt.compare(oldpassword, password)
-    if(!is_correct_password){
-        return next(new Error("wronge oldpassword"))
+export const re_assign = error_handeling(async (req, res, next) => {
+    const { code, newpassword } = req.body;
+
+    const { email, otppassword } = req.user;
+
+    const compare = await bcrypt.compare(code, otppassword);
+
+    if (!compare) {
+        return next(new Error("invalid code"));
     }
 
-    const new_password= await bcrypt.hash(newpassword,+process.env.SECRET_KEY )
-   
-     await user.updateOne({email},{password:new_password, changepasswordAt:now()})
+    const new_password = await bcrypt.hash(newpassword, 10);
 
-     res.status(200).json({msg:'password  update successfully'})
-})
+    await user.updateOne(
+        { email },
+        {
+            password: new_password,
+            changepasswordAt: Date.now()
+        }
+    );
+
+    res.status(200).json({ msg: 'password updated successfully' });
+});
 
 //-------------------------------------------social login--------------------------------------------------------------------------------------
 export const social_login=error_handeling(async(req,res,next) => {

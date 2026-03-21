@@ -104,6 +104,32 @@ export const get_posts = error_handeling(async (req, res, next) => {
     );
     res.status(200).json({ _page, data });
 });
+
+//----------------------------------------------------my posts.--------------------
+export const get_myposts = error_handeling(async (req, res, next) => {
+
+    const { page } = req.query;
+    const { _page, data } = await bagination(
+        {
+            page,
+            model: post,
+            filter: { user_id: req.user._id }, 
+            populate: [
+                { path: "user_id", select: 'name email' },
+                { path: 'likes', select: 'name email', match: { _id: { $nin: req.user.blockedUsers } } },
+                { path: 'comments', 
+                  match: { user_id: { $nin: req.user.blockedUsers } },
+                  populate: { 
+                    path: 'reply', 
+                    match: { user_id: { $nin: req.user.blockedUsers } } 
+                  } 
+                }
+            ]
+        },
+        req.user.blockedUsers
+    );
+    res.status(200).json({ _page, data });
+});
 //-----------------------------------------------------undo only the post they created within 2 minutes of its creation..------------------------------------------------------------------------------
 export const undo_post = error_handeling(async (req, res, next) => {
     const { id } = req.params;
@@ -121,24 +147,48 @@ export const undo_post = error_handeling(async (req, res, next) => {
     await post.deleteOne({ _id:id }); 
     res.status(200).json({ message: "Post successfully undone." });
 });
-//-----------------------------------------------------user can archive a post, but only if 24 hours have passed since its creation.------------------------------------------------------------------------------
+//-----------------------------------------------------user can archive a post, .------------------------------------------------------------------------------
 export const archive_post = error_handeling(async (req, res, next) => {
     const { id } = req.params;
 
-    const Post = await post.findOne({ _id:id, user_id: req.user._id });
+    const Post = await post.findOne({ _id: id, user_id: req.user._id });
 
     if (!Post) {
         return res.status(404).json({ message: "Post not found or you don't have permission." });
     }
 
-    const timeDiff = (Date.now() - Post.createdAt.getTime()) / (1000 * 60 * 60); //BY HOURS
-
-    if (timeDiff < 24) {
-        return res.status(403).json({ message: "You can archive this post only after 24 hours." });
-    }
-
-    Post.isArchived = true;
+    // ✅ toggle: archive if not archived, unarchive if already archived
+    Post.isArchived = !Post.isArchived;
     await Post.save();
 
-    res.status(200).json({ message: "Post archived successfully." });
+    res.status(200).json({ 
+        message: Post.isArchived ? "Post archived successfully." : "Post unarchived successfully." 
+    });
+});
+//------------------------------------------------------get one post--------------------------------------------------------------------------------
+export const get_post = error_handeling(async (req, res, next) => {
+    const { id } = req.params;
+
+    const Post = await post.findOne({ 
+        _id: id,
+        isdeleted: { $exists: false },
+        isArchived: false,
+        user_id: { $nin: req.user.blockedUsers }  
+    })
+    .populate({ path: "user_id", select: 'name email' })
+    .populate({ path: 'likes', select: 'name email', match: { _id: { $nin: req.user.blockedUsers } } })
+    .populate({ 
+        path: 'comments', 
+        match: { user_id: { $nin: req.user.blockedUsers } },
+        populate: { 
+            path: 'reply', 
+            match: { user_id: { $nin: req.user.blockedUsers } } 
+        } 
+    });
+
+    if (!Post) {
+        return res.status(404).json({ message: "Post not found." });
+    }
+
+    res.status(200).json({ data: Post });
 });

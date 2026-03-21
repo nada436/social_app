@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { server } from "../../../index.js";
-import { socket_auth } from "../../midelware/authantcation.js";
+import { socket_auth } from "../../middleware/authentication.js";
 import { sendmessage } from "./message.servies.js";
 
 
