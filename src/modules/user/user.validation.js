@@ -29,17 +29,9 @@ export const signup_schema = {
     name: genral_schema.name.required(),
     email: genral_schema.email.required(),
     password: genral_schema.password.required(),
-    cpassword: Joi.string()
-      .valid(Joi.ref('password'))
-      .required()
-      .messages({ 'any.only': 'Confirm password must match password' }),
     phone: Joi.string().length(12).required(),
     gender: Joi.string().valid('male', 'female').required(),
-  }),
-  files: Joi.object({
-    images: Joi.array().items(genral_schema.cloudinarySchema).required(),
-    coverimage: Joi.array().items(genral_schema.cloudinarySchema).required(),
-  }),
+  })
 };
 
 // Confirm Code Schema
