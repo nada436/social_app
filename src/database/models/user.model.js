@@ -43,14 +43,14 @@ const userSchema = new mongoose.Schema(
       default:"user"
     },
     coverimage: {
-      public_id: { type: String, required: true }, 
-      secure_url: { type: String, required: true }, 
+      public_id: { type: String }, 
+      secure_url: { type: String }, 
     },
     
     images: {
       type: [{
-        public_id: { type: String, required: true }, 
-        secure_url: { type: String, required: true }, 
+        public_id: { type: String}, 
+        secure_url: { type: String }, 
       }],
     },
     otpEmail: {

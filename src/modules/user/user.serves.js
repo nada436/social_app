@@ -11,6 +11,7 @@ import cloudinary from '../../cloudinary/index.js';
 import { authentication_types, decoded } from '../../middleware/authentication.js';
 import { post } from '../../database/models/post.model.js';
 import { comment } from '../../database/models/comment.model.js';
+import { bagination } from '../../utils/features/bagination.js';
 
 
 
@@ -31,19 +32,19 @@ export const sign_up=error_handeling(async(req,res,next) => {
      const hashpassword= await bcrypt.hash(password,+process.env.SECRET_KEY )
      const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
      const user_no=customAlphabet('123456789',4)()
-    //upload coverimage
+    // //upload coverimage
     
-    const coverImage = req.files['coverimage'][0];
-    const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
+    // const coverImage = req.files['coverimage'][0];
+    // const { public_id, secure_url } = await cloudinary.uploader.upload(coverImage.path, { folder: `social_app/users/${user_no}/coverimage` });
 
-    // upload images
-    const arr_of_files = [];
-    for (const file of req.files['images']) {
-      const { public_id, secure_url } = await cloudinary.uploader.upload(file.path, { folder: `social_app/users/${user_no}/images` });
-      arr_of_files.push({ public_id, secure_url });
-    }
+    // // upload images
+    // const arr_of_files = [];
+    // for (const file of req.files['images']) {
+    //   const { public_id, secure_url } = await cloudinary.uploader.upload(file.path, { folder: `social_app/users/${user_no}/images` });
+    //   arr_of_files.push({ public_id, secure_url });
+    // }
 
-     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system',coverimage:{public_id,secure_url},images:arr_of_files,user_no})
+     await user.create({name,email,password:hashpassword,phone:hashphone,gender,provider:'system'})
     
      //send email
      eventEmitter.emit('sendemail',req.body)
@@ -182,26 +183,42 @@ export const social_login=error_handeling(async(req,res,next) => {
 })
 
 //-----------------------------------update user info(name,phone,gender,coverimage)------------------------------------------------------------------
-export const update_userinfo=error_handeling(async(req,res,next) => {
-    const {email,coverimage}=req.user
-    
-   //update user phone
-   if(req.body?.phone){
-    const {phone}=req.body
-    const hashphone= await CryptoJS.AES.encrypt(phone, process.env.SECRET_KEY).toString();
-    req.body.phone=hashphone
-}
-    //update user coverimage
-   if(req?.file){
-   await cloudinary.uploader.destroy(coverimage.public_id
-   )  //delete old image in cloudinary first
-   const {public_id,secure_url}=await cloudinary.uploader.upload(req.file.path, { folder:`social_app/users/${req.user.user_no}/coverimage` });
-   req.body.coverimage={public_id,secure_url}
+export const update_userinfo = error_handeling(async (req, res, next) => {
+  const { email } = req.user;
 
-}
-     await user.updateOne({email},{...req.body})
-     res.status(200).json({msg:'user info updated successfully'})
-})
+  // update phone
+  if (req.body?.phone) {
+    const hashphone = await CryptoJS.AES.encrypt(
+      req.body.phone,
+      process.env.SECRET_KEY
+    ).toString();
+
+    req.body.phone = hashphone;
+  }
+
+  // update cover image
+  if (req.file) {
+
+    // delete old image
+    if (req.user.coverimage?.public_id) {
+      await cloudinary.uploader.destroy(req.user.coverimage.public_id);
+    }
+
+    // upload new image
+    const { public_id, secure_url } =
+      await cloudinary.uploader.upload(req.file.path, {
+        folder: `social_app/users/${req.user.user_no}/coverimage`,
+      });
+
+    req.body.coverimage = { public_id, secure_url };
+  }
+
+  await user.updateOne({ email }, { ...req.body });
+
+  res.status(200).json({
+    msg: 'user info updated successfully',
+  });
+});
 //--------------------------------------------share profile----------------------------------------------------------------------------------
 export const share_profile=error_handeling(async(req,res,next) => {
     const {id}=req.params      //id of profile want to visit
@@ -367,3 +384,16 @@ export const update_role = error_handeling(async (req, res, next) => {
     }
     res.status(200).json({ msg: "Role changed successfully", user: User });
 });
+//--------------------------------------------all users---------------------------------------------------------------------------------------------
+export const all_users=error_handeling(async(req,res)=>{
+
+   const blocked = req.user.blockedUsers
+ || [];
+
+let data = await user.find({
+  isdeleted: false,
+  confirm: true,
+  _id: { $nin: [...blocked, req.user._id] }
+});
+    res.status(200).json({ data });
+})
